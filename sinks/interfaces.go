@@ -129,22 +129,13 @@ func ManufactureSink() (e EventSinkInterface) {
 		go s.Run(make(chan bool))
 		return s
 	case "influxdb":
-		host := viper.GetString("influxdbHost")
-		if host == "" {
-			panic("influxdb sink specified but influxdbHost not specified")
-		}
-
-		username := viper.GetString("influxdbUsername")
-		if username == "" {
-			panic("influxdb sink specified but influxdbUsername not specified")
-		}
-
-		password := viper.GetString("influxdbPassword")
-		if password == "" {
-			panic("influxdb sink specified but influxdbPassword not specified")
+		url := viper.GetString("influxdbURL")
+		if url == "" {
+			panic("influxdb sink specified but influxdbURL not specified")
 		}
 
 		viper.SetDefault("influxdbName", "k8s")
+		viper.SetDefault("influxdbMeasurement", "k8s_events")
 		viper.SetDefault("influxdbSecure", false)
 		viper.SetDefault("influxdbWithFields", false)
 		viper.SetDefault("influxdbInsecureSsl", false)
@@ -154,9 +145,11 @@ func ManufactureSink() (e EventSinkInterface) {
 		viper.SetDefault("influxdbConcurrency", 1)
 
 		dbName := viper.GetString("influxdbName")
-		secure := viper.GetBool("influxdbSecure")
-		withFields := viper.GetBool("influxdbWithFields")
+		measurementName := viper.GetString("influxdbMeasurement")
 		insecureSsl := viper.GetBool("influxdbInsecureSsl")
+		username := viper.GetString("influxdbUsername")
+		password := viper.GetString("influxdbPassword")
+		withFields := viper.GetBool("influxdbWithFields")
 		retentionPolicy := viper.GetString("influxdbRetentionPolicy")
 		cluterName := viper.GetString("influxdbClusterName")
 		disableCounterMetrics := viper.GetBool("influxdbDisableCounterMetrics")
@@ -165,9 +158,9 @@ func ManufactureSink() (e EventSinkInterface) {
 		cfg := InfluxdbConfig{
 			User:                  username,
 			Password:              password,
-			Secure:                secure,
-			Host:                  host,
+			URL:                   url,
 			DbName:                dbName,
+			MeasurementName:       measurementName,
 			WithFields:            withFields,
 			InsecureSsl:           insecureSsl,
 			RetentionPolicy:       retentionPolicy,

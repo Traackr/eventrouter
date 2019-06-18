@@ -53,7 +53,6 @@ var (
 )
 
 const (
-	eventMeasurementName = "k8s_events"
 	// Event special tags
 	eventUID = "uid"
 	// Value Field name
@@ -80,9 +79,9 @@ type InfluxDBSink struct {
 type InfluxdbConfig struct {
 	User                  string
 	Password              string
-	Secure                bool
-	Host                  string
+	URL                   string
 	DbName                string
+	MeasurementName       string
 	WithFields            bool
 	InsecureSsl           bool
 	RetentionPolicy       string
@@ -106,13 +105,9 @@ func NewInfuxdbSink(cfg InfluxdbConfig) (EventSinkInterface, error) {
 }
 
 func newClient(c InfluxdbConfig) (*influxdb.Client, error) {
-	url := &url.URL{
-		Scheme: "http",
-		Host:   c.Host,
-	}
-
-	if c.Secure {
-		url.Scheme = "https"
+	url, err := url.Parse(c.URL)
+	if err != nil {
+		return nil, err
 	}
 
 	iConfig := &influxdb.Config{
@@ -128,7 +123,7 @@ func newClient(c InfluxdbConfig) (*influxdb.Client, error) {
 	}
 
 	if _, _, err := client.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping influxDB server at %q - %v", c.Host, err)
+		return nil, fmt.Errorf("failed to ping influxDB server at %q - %v", c.URL, err)
 	}
 
 	return client, nil
@@ -141,9 +136,9 @@ func (sink *InfluxDBSink) UpdateEvents(eNew *v1.Event, eOld *v1.Event) {
 	var point *influxdb.Point
 	var err error
 	if sink.config.WithFields {
-		point, err = eventToPointWithFields(eNew)
+		point, err = eventToPointWithFields(eNew, sink.config.MeasurementName)
 	} else {
-		point, err = eventToPoint(eNew)
+		point, err = eventToPoint(eNew, sink.config.MeasurementName)
 	}
 	if err != nil {
 		glog.Warningf("Failed to convert event to point: %v", err)
@@ -165,9 +160,9 @@ func getEventValue(event *v1.Event) (string, error) {
 	return string(bytes), nil
 }
 
-func eventToPointWithFields(event *v1.Event) (*influxdb.Point, error) {
+func eventToPointWithFields(event *v1.Event, measurement string) (*influxdb.Point, error) {
 	point := influxdb.Point{
-		Measurement: "events",
+		Measurement: measurement,
 		Time:        event.LastTimestamp.Time.UTC(),
 		Fields: map[string]interface{}{
 			"message": event.Message,
@@ -189,14 +184,14 @@ func eventToPointWithFields(event *v1.Event) (*influxdb.Point, error) {
 	return &point, nil
 }
 
-func eventToPoint(event *v1.Event) (*influxdb.Point, error) {
+func eventToPoint(event *v1.Event, measurement string) (*influxdb.Point, error) {
 	value, err := getEventValue(event)
 	if err != nil {
 		return nil, err
 	}
 
 	point := influxdb.Point{
-		Measurement: eventMeasurementName,
+		Measurement: measurement,
 		Time:        event.LastTimestamp.Time.UTC(),
 		Fields: map[string]interface{}{
 			valueField: value,
@@ -273,7 +268,7 @@ func (sink *InfluxDBSink) createDatabase() error {
 	}
 
 	sink.dbExists = true
-	glog.Infof("Created database %q on influxDB server at %q", sink.config.DbName, sink.config.Host)
+	glog.Infof("Created database %q on influxDB server at %q", sink.config.DbName, sink.config.URL)
 	return nil
 }
 
@@ -288,6 +283,6 @@ func (sink *InfluxDBSink) createRetentionPolicy() error {
 		}
 	}
 
-	glog.Infof("Created database %q on influxDB server at %q", sink.config.DbName, sink.config.Host)
+	glog.Infof("Created database %q on influxDB server at %q", sink.config.DbName, sink.config.URL)
 	return nil
 }
